@@ -1,6 +1,39 @@
 #! /usr/bin/env python
 
-"""Load data from queue into tables, with optional partitioning."""
+"""Load data from queue into tables, with optional partitioning.
+
+--ini
+ql_srcdb_queue_to_dstdb
+[queue_loader]
+job_name          = test_move
+
+src_db            = dbname=sourcedb
+dst_db            = dbname=destinationdb
+
+pgq_queue_name    = OrderLog
+
+logfile           = ~/log/%(job_name)s.log
+pidfile           = ~/pid/%(job_name)s.pid
+
+# where to put data.  when partitioning, will be used as base name
+dest_table = orders
+
+# date field with will be used for partitioning
+# special value: _EVTIME - event creation time
+part_column = start_date
+
+#fields = *
+#fields = id, name
+#fields = id:newid, name, bar:baz
+
+
+# template used for creating partition tables
+# _DEST_TABLE
+part_template     = 
+    create table _DEST_TABLE () inherits (orders);
+    alter table only _DEST_TABLE add constraint _DEST_TABLE_pkey primary key (id);
+    grant select on _DEST_TABLE to group postgres;
+"""
 
 import sys, time, skytools
 
@@ -253,9 +286,8 @@ class BulkLoader(BasicLoader):
             self.log.debug(del_sql)
             curs.execute(del_sql)
             self.log.debug("%s - %d" % (curs.statusmessage, curs.rowcount))
-            self.log.debug(curs.statusmessage)
             if len(del_list) != curs.rowcount:
-                self.log.warning("Delete mismatch: expected=%s updated=%d"
+                self.log.warning("Delete mismatch: expected=%s deleted=%d"
                         % (len(del_list), curs.rowcount))
             temp_used = True
 
@@ -274,7 +306,7 @@ class BulkLoader(BasicLoader):
                 # update main table
                 self.log.debug(upd_sql)
                 curs.execute(upd_sql)
-                self.log.debug(curs.statusmessage)
+                self.log.debug("%s - %d" % (curs.statusmessage, curs.rowcount))
                 # check count
                 if len(upd_list) != curs.rowcount:
                     self.log.warning("Update mismatch: expected=%s updated=%d"
